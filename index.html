@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="VoiceInput">
+<meta name="theme-color" content="#111827">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-RFrX+bV2siiniWL/ZDrhopbe+29+IHfEB1Bt7xrCht8='; style-src 'unsafe-inline'; connect-src wss://generativelanguage.googleapis.com; img-src data:; base-uri 'none'; form-action 'none'">
+<title>VoiceInput</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--fg:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#2563eb;--rec:#dc2626;--warn:#b45309}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0f17;--card:#151b27;--fg:#e5e7eb;--muted:#9ca3af;--line:#263041;--accent:#60a5fa;--rec:#f87171;--warn:#fbbf24}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;-webkit-text-size-adjust:100%}
+body{min-height:100vh;padding:0 16px calc(76px + env(safe-area-inset-bottom))}
+#live{position:sticky;top:0;z-index:5;margin:0 -16px 12px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:var(--card);border-bottom:1px solid var(--line)}
+#liveStatus{font-size:13px;font-weight:600;color:var(--muted)}
+#liveText{margin-top:4px;font-size:20px;line-height:1.4;word-break:break-word}
+#liveStats{margin-top:4px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+main{max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 12px}
+.label{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:8px}
+.muted{color:var(--muted)} .small{font-size:12px} .warn{color:var(--warn);font-size:12px;margin:6px 0}
+.stats{margin-top:8px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.resulttext{white-space:pre-wrap;word-break:break-word;font-size:18px;-webkit-user-select:text;user-select:text}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.grow{flex:1}
+.item{display:flex;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.item.col{flex-direction:column;align-items:stretch;gap:4px}
+.item.clickable{cursor:pointer}
+input[type=text],input[type=password],select,textarea{flex:1;min-width:0;width:100%;font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px}
+.row>input[type=text],.row>input[type=password]{width:auto}
+textarea{margin:6px 0}
+.chk{display:flex;gap:8px;align-items:center;margin-top:8px}
+.chk input{width:20px;height:20px}
+.btn{font:inherit;font-weight:600;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-height:44px}
+.btn.small{padding:6px 10px;min-height:34px;font-size:13px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--rec)}
+#micwrap{display:flex;flex-direction:column;align-items:center;padding:24px 0 8px}
+#mic{width:168px;height:168px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:64px;line-height:1;display:flex;align-items:center;justify-content:center;
+  touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;box-shadow:0 8px 24px rgba(37,99,235,.35);transition:transform .08s,background .15s}
+#mic:active,#mic.rec{transform:scale(1.06)}
+#mic.rec{background:var(--rec);box-shadow:0 0 0 12px rgba(220,38,38,.18)}
+#mic.lock{box-shadow:0 0 0 12px rgba(220,38,38,.3)}
+#mic.cancel{background:#6b7280;box-shadow:none}
+#cancelBtn{margin-top:14px}
+#micHint{margin-top:14px;text-align:center;font-size:13px;color:var(--muted)}
+#balance{margin:6px 0 14px;text-align:center;font-size:13px;color:var(--muted)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;font:inherit;font-size:12px;color:var(--muted);background:transparent;border:0;padding:10px 0;min-height:56px}
+nav button.on{color:var(--accent);font-weight:700}
+nav button span{display:block;font-size:20px;line-height:1.2}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="live" role="status" aria-live="polite">
+  <div id="liveStatus"></div>
+  <div id="liveText" hidden></div>
+  <div id="liveStats" hidden></div>
+</div>
+<main>
+  <section id="p-rec">
+    <div id="micwrap">
+      <button id="mic" type="button" aria-label="録音ボタン（長押しで録音）">🎤</button>
+      <button id="cancelBtn" class="btn danger" type="button" hidden>取消</button>
+      <div id="micHint">長押し＝押している間だけ録音 ／ 2回タップ＝録音固定<br>押したまま上へスライド＝取消</div>
+    </div>
+    <div id="balance"></div>
+    <div id="result"></div>
+  </section>
+  <section id="p-dict" hidden></section>
+  <section id="p-hist" hidden></section>
+  <section id="p-set" hidden></section>
+</main>
+<nav>
+  <button id="t-rec" type="button"><span>🎤</span>録音</button>
+  <button id="t-dict" type="button"><span>📖</span>辞書</button>
+  <button id="t-hist" type="button"><span>🕘</span>履歴</button>
+  <button id="t-set" type="button"><span>⚙️</span>設定</button>
+</nav>
+<script>
+/* VoiceInput Mobile — 純粋ロジック（DOM・ネットワークに依存しない）。Node のテストとブラウザの両方で使う。 */
+const VI = (function () {
+  'use strict';
+
+  // ---------------------------------------------------------------- 状態機械
+  // Mac 版 HotkeyStateMachine の移植。イベント: down / up / other / escape / tick
+  // アクション: beginCapture / showRecording / showRecordingLocked / commit / discard
+  class GestureMachine {
+    constructor(cfg) {
+      cfg = cfg || {};
+      this.hold = cfg.holdThreshold !== undefined ? cfg.holdThreshold : 0.25;
+      this.win = cfg.doubleTapWindow !== undefined ? cfg.doubleTapWindow : 0.40;
+      this.state = { k: 'idle' };
+    }
+    get isIdle() { return this.state.k === 'idle'; }
+    get isRecording() { return this.state.k === 'holding' || this.state.k === 'locked'; }
+    reset() { this.state = { k: 'idle' }; }
+
+    handle(ev, now) {
+      const s = this.state;
+      switch (s.k) {
+        case 'idle':
+          if (ev === 'down') { this.state = { k: 'pressed', at: now, second: false }; return ['beginCapture']; }
+          return [];
+        case 'pressed':
+          if (ev === 'tick') {
+            if (now - s.at >= this.hold) { this.state = { k: 'holding' }; return ['showRecording']; }
+            return [];
+          }
+          if (ev === 'up') {
+            if (now - s.at >= this.hold) { this.state = { k: 'idle' }; return ['showRecording', 'commit']; }
+            if (s.second) { this.state = { k: 'locked' }; return ['showRecordingLocked']; }
+            this.state = { k: 'waitSecond', releasedAt: now };
+            return ['discard'];
+          }
+          if (ev === 'other' || ev === 'escape') { this.state = { k: 'ignoreUntilUp' }; return ['discard']; }
+          return [];
+        case 'holding':
+          if (ev === 'up') { this.state = { k: 'idle' }; return ['commit']; }
+          if (ev === 'other' || ev === 'escape') { this.state = { k: 'ignoreUntilUp' }; return ['discard']; }
+          return [];
+        case 'waitSecond':
+          if (ev === 'down') {
+            this.state = { k: 'pressed', at: now, second: now - s.releasedAt <= this.win };
+            return ['beginCapture'];
+          }
+          if (ev === 'tick') { if (now - s.releasedAt > this.win) this.state = { k: 'idle' }; return []; }
+          if (ev === 'other' || ev === 'escape') { this.state = { k: 'idle' }; return []; }
+          return [];
+        case 'locked':
+          if (ev === 'down') { this.state = { k: 'ignoreUntilUp' }; return ['commit']; }
+          if (ev === 'escape') { this.state = { k: 'idle' }; return ['discard']; }
+          return [];
+        case 'ignoreUntilUp':
+          if (ev === 'up') this.state = { k: 'idle' };
+          return [];
+        default:
+          return [];
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- 費用
+  const PRICING = { inputPerMillionUSD: 3.5, outputPerMillionUSD: 21.0, audioTokensPerSecond: 25 };
+
+  const Cost = {
+    estimatedInputTokens(seconds, p) {
+      p = p || PRICING;
+      return Math.round(Math.max(0, seconds) * p.audioTokensPerSecond);
+    },
+    // ASCII は約4文字/tok、それ以外は約1文字/tok
+    estimatedOutputTokens(text) {
+      if (!text) return 0;
+      let ascii = 0, other = 0;
+      for (const ch of text) { if (ch.charCodeAt(0) < 128) ascii++; else other++; }
+      return Math.max(1, Math.ceil(ascii / 4 + other));
+    },
+    costUSD(inTok, outTok, p) {
+      p = p || PRICING;
+      return (inTok * p.inputPerMillionUSD + outTok * p.outputPerMillionUSD) / 1e6;
+    },
+    costJPY(inTok, outTok, usdToJPY, p) {
+      return Cost.costUSD(inTok, outTok, p) * usdToJPY;
+    },
+  };
+
+  const Fmt = {
+    yen(v) {
+      const a = Math.abs(v);
+      const sign = v < 0 ? '-' : '';
+      if (a < 1) return sign + '¥' + a.toFixed(2);
+      if (a < 100) return sign + '¥' + a.toFixed(1);
+      return sign + '¥' + a.toFixed(0);
+    },
+    seconds(s) { return s.toFixed(1) + '秒'; },
+    summary(st, remainingJPY) {
+      const parts = [
+        Fmt.seconds(st.seconds),
+        '入力 ' + st.inputTokens + 'tok / 出力 ' + st.outputTokens + 'tok',
+        '約' + Fmt.yen(st.costJPY),
+      ];
+      if (remainingJPY !== null && remainingJPY !== undefined) parts.push('残高目安 ' + Fmt.yen(remainingJPY));
+      let s = parts.join(' ・ ');
+      if (st.isEstimated) s += '（トークンは推定）';
+      return s;
+    },
+  };
+
+  const Balance = {
+    remaining(b) { return b.baseJPY > 0 ? b.baseJPY - b.spentJPY : null; },
+    spend(b, jpy) { return { baseJPY: b.baseJPY, spentJPY: b.spentJPY + Math.max(0, jpy) }; },
+    reset(base) { return { baseJPY: Math.max(0, base), spentJPY: 0 }; },
+  };
+
+  // ---------------------------------------------------------------- Live API プロトコル
+  const MODEL = 'gemini-3.5-transcribe-live';
+
+  const Protocol = {
+    setupMessage(languageCodes, vocabulary) {
+      const tr = { mode: 'SMART', languageCodes: languageCodes || [] };
+      if (vocabulary && vocabulary.length) tr.customVocabulary = vocabulary;
+      return JSON.stringify({
+        setup: {
+          model: 'models/' + MODEL,
+          generationConfig: { responseModalities: ['TEXT'] },
+          realtimeInputConfig: { automaticActivityDetection: { disabled: true } },
+          inputAudioTranscription: tr,
+        },
+      });
+    },
+    activityStart() { return JSON.stringify({ realtimeInput: { activityStart: {} } }); },
+    activityEnd() { return JSON.stringify({ realtimeInput: { activityEnd: {} } }); },
+    audioChunk(base64) {
+      return JSON.stringify({ realtimeInput: { audio: { data: base64, mimeType: 'audio/pcm;rate=16000' } } });
+    },
+    // 受信メッセージ（文字列）→ イベント配列
+    parse(text) {
+      let obj;
+      try { obj = typeof text === 'string' ? JSON.parse(text) : text; } catch (e) { return []; }
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return [];
+      const ev = [];
+      if (obj.setupComplete !== undefined) ev.push({ type: 'setupComplete' });
+      const sc = obj.serverContent;
+      if (sc && typeof sc === 'object') {
+        if (sc.interimInputTranscription && typeof sc.interimInputTranscription.text === 'string')
+          ev.push({ type: 'interim', text: sc.interimInputTranscription.text });
+        if (sc.inputTranscription && typeof sc.inputTranscription.text === 'string')
+          ev.push({ type: 'final', text: sc.inputTranscription.text });
+        if (sc.turnComplete === true) ev.push({ type: 'turnComplete' });
+      }
+      const um = obj.usageMetadata;
+      if (um && typeof um === 'object') {
+        const p = Number.isInteger(um.promptTokenCount) ? um.promptTokenCount : 0;
+        const r = Number.isInteger(um.responseTokenCount) ? um.responseTokenCount
+          : (Number.isInteger(um.candidatesTokenCount) ? um.candidatesTokenCount : 0);
+        ev.push({ type: 'usage', prompt: p, response: r });
+      }
+      if (obj.goAway !== undefined) ev.push({ type: 'goAway' });
+      if (obj.error && typeof obj.error === 'object')
+        ev.push({ type: 'error', message: typeof obj.error.message === 'string' ? obj.error.message : 'unknown error' });
+      return ev;
+    },
+  };
+
+  // ---------------------------------------------------------------- 確定/途中テキストの組み立て
+  class Assembler {
+    constructor() { this.finals = []; this.interim = ''; }
+    addFinal(s) { if (s) this.finals.push(s); this.interim = ''; }
+    setInterim(s) { this.interim = s; }
+    static join(a, b) {
+      if (!a || !b) return a + b;
+      const last = a[a.length - 1], first = b[0];
+      if ('.?!,'.indexOf(last) >= 0 && /^[A-Za-z0-9]$/.test(first)) return a + ' ' + b;
+      return a + b;
+    }
+    get committed() { return this.finals.reduce((acc, s) => Assembler.join(acc, s), ''); }
+    get display() { return Assembler.join(this.committed, this.interim); }
+  }
+
+  // ---------------------------------------------------------------- 音声変換
+  // 入力サンプルレート → 16kHz の箱型平均ダウンサンプル（ストリーム対応）
+  class Resampler {
+    constructor(inRate) {
+      this.ratio = inRate / 16000;
+      this.acc = 0; this.cnt = 0; this.phase = 0;
+    }
+    process(f32) {
+      const out = [];
+      for (let i = 0; i < f32.length; i++) {
+        this.acc += f32[i]; this.cnt++; this.phase += 1;
+        if (this.phase >= this.ratio) {
+          this.phase -= this.ratio;
+          out.push(this.acc / this.cnt);
+          this.acc = 0; this.cnt = 0;
+        }
+      }
+      return out;
+    }
+  }
+
+  function floatToPcm16(samples) {
+    const u8 = new Uint8Array(samples.length * 2);
+    const dv = new DataView(u8.buffer);
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      dv.setInt16(i * 2, s < 0 ? Math.round(s * 32768) : Math.round(s * 32767), true);
+    }
+    return u8;
+  }
+
+  function bytesToBase64(u8) {
+    let bin = '';
+    for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  const CHUNK_BYTES = 3200; // 100ms
+
+  class ChunkBuffer {
+    constructor() { this.buf = new Uint8Array(0); }
+    push(u8) {
+      const n = new Uint8Array(this.buf.length + u8.length);
+      n.set(this.buf, 0); n.set(u8, this.buf.length);
+      this.buf = n;
+    }
+    take(flush) {
+      const out = [];
+      while (this.buf.length >= CHUNK_BYTES) {
+        out.push(this.buf.slice(0, CHUNK_BYTES));
+        this.buf = this.buf.slice(CHUNK_BYTES);
+      }
+      if (flush && this.buf.length) { out.push(this.buf); this.buf = new Uint8Array(0); }
+      return out;
+    }
+    clear() { this.buf = new Uint8Array(0); }
+  }
+
+  // ---------------------------------------------------------------- 辞書
+  const Dict = {
+    empty() { return { hints: [], rules: [] }; },
+    addHint(d, term) {
+      const t = String(term).trim();
+      if (!t || d.hints.indexOf(t) >= 0) return false;
+      d.hints.push(t);
+      return true;
+    },
+    addRule(d, from, to, isRegex) {
+      if (!from) return false;
+      isRegex = !!isRegex;
+      if (d.rules.some((r) => r.from === from && r.to === to && !!r.isRegex === isRegex)) return false;
+      d.rules.push({ id: String(Date.now()) + Math.random().toString(36).slice(2, 7), from: from, to: to, isRegex: isRegex, enabled: true });
+      return true;
+    },
+    applyRules(d, text) {
+      let out = text;
+      for (const r of d.rules) {
+        if (!r.enabled || !r.from) continue;
+        if (r.isRegex) {
+          try { out = out.replace(new RegExp(r.from, 'g'), r.to); } catch (e) { /* 不正な正規表現は無視 */ }
+        } else {
+          out = out.split(r.from).join(r.to);
+        }
+      }
+      return out;
+    },
+    vocabularyForAPI(d, limit) {
+      limit = limit || 1000;
+      const seen = new Set(); const res = [];
+      for (const h of d.hints) {
+        const t = String(h).trim();
+        if (!t || seen.has(t)) continue;
+        seen.add(t); res.push(t);
+        if (res.length >= limit) break;
+      }
+      return res;
+    },
+  };
+
+  // ---------------------------------------------------------------- 差分と学習（Mac 版 TextDiff / LearningEngine の移植）
+  const isWord = (ch) => /^[A-Za-z0-9]$/.test(ch);
+
+  function hunks(oldS, newS, maxLength) {
+    maxLength = maxLength || 2000;
+    if (oldS === newS) return [];
+    const a = Array.from(oldS), b = Array.from(newS);
+    const n = a.length, m = b.length;
+    if (n > maxLength || m > maxLength) return [];
+    const w = m + 1;
+    const dp = new Int32Array((n + 1) * w);
+    for (let i = n - 1; i >= 0; i--) {
+      for (let j = m - 1; j >= 0; j--) {
+        dp[i * w + j] = a[i] === b[j] ? dp[(i + 1) * w + j + 1] + 1 : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+      }
+    }
+    const chunks = [];
+    let eq = '', del = '', ins = '';
+    const flushEq = () => { if (eq) { chunks.push({ t: 'eq', s: eq }); eq = ''; } };
+    const flushCh = () => { if (del || ins) { chunks.push({ t: 'ch', d: del, i: ins }); del = ''; ins = ''; } };
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (a[i] === b[j]) { flushCh(); eq += a[i]; i++; j++; }
+      else if (dp[(i + 1) * w + j] >= dp[i * w + j + 1]) { flushEq(); del += a[i]; i++; }
+      else { flushEq(); ins += b[j]; j++; }
+    }
+    while (i < n) { flushEq(); del += a[i]; i++; }
+    while (j < m) { flushEq(); ins += b[j]; j++; }
+    flushEq(); flushCh();
+
+    // 近接する差分の結合: change, equal(1文字以下), change
+    const merged = [];
+    for (const c of chunks) {
+      merged.push(c);
+      const k = merged.length;
+      if (k >= 3 && merged[k - 1].t === 'ch' && merged[k - 2].t === 'eq' &&
+          Array.from(merged[k - 2].s).length <= 1 && merged[k - 3].t === 'ch') {
+        const c2 = merged.pop(), e = merged.pop(), c1 = merged.pop();
+        merged.push({ t: 'ch', d: c1.d + e.s + c2.d, i: c1.i + e.s + c2.i });
+      }
+    }
+
+    const result = [];
+    merged.forEach((c, idx) => {
+      if (c.t !== 'ch') return;
+      let d = c.d, ins2 = c.i;
+      if (idx > 0 && merged[idx - 1].t === 'eq') {
+        const prev = Array.from(merged[idx - 1].s);
+        while (prev.length) {
+          const last = prev[prev.length - 1];
+          const first = Array.from(d || ins2)[0];
+          if (!(isWord(last) && first !== undefined && isWord(first))) break;
+          prev.pop(); d = last + d; ins2 = last + ins2;
+        }
+      }
+      if (idx + 1 < merged.length && merged[idx + 1].t === 'eq') {
+        const next = Array.from(merged[idx + 1].s);
+        while (next.length) {
+          const first = next[0];
+          const tail = Array.from(ins2 || d);
+          const last = tail[tail.length - 1];
+          if (!(isWord(first) && last !== undefined && isWord(last))) break;
+          next.shift(); d += first; ins2 += first;
+        }
+      }
+      result.push({ deleted: d, inserted: ins2 });
+    });
+    return result;
+  }
+
+  const hasContent = (s) => /[\p{L}\p{N}]/u.test(s);
+  const len = (s) => Array.from(s).length;
+
+  function suggest(history, dict, maxTermLength) {
+    maxTermLength = maxTermLength || 30;
+    const ruleCounts = new Map();
+    const hintCounts = new Map();
+    for (const e of history) {
+      if (!e.corrected || e.corrected === e.output) continue;
+      for (const h of hunks(e.output, e.corrected)) {
+        const d = h.deleted.trim(), i = h.inserted.trim();
+        if (!i || !hasContent(i) || len(i) > maxTermLength) continue;
+        if (d && hasContent(d) && len(d) <= maxTermLength && d !== i) {
+          const exists = dict.rules.some((r) => r.from === d && r.to === i && !r.isRegex);
+          if (!exists) {
+            const key = d + '\u001f' + i;
+            const cur = ruleCounts.get(key) || { from: d, to: i, count: 0 };
+            cur.count++;
+            ruleCounts.set(key, cur);
+          }
+        }
+        if (len(i) >= 2 && dict.hints.indexOf(i) < 0) hintCounts.set(i, (hintCounts.get(i) || 0) + 1);
+      }
+    }
+    const rules = Array.from(ruleCounts.values()).sort((x, y) =>
+      x.count !== y.count ? y.count - x.count : (x.from + x.to < y.from + y.to ? -1 : 1));
+    const hints = Array.from(hintCounts.entries()).map(([term, count]) => ({ term: term, count: count }))
+      .sort((x, y) => x.count !== y.count ? y.count - x.count : (x.term < y.term ? -1 : 1));
+    return { rules: rules, hints: hints };
+  }
+
+  // ---------------------------------------------------------------- 秘密の除去とログ
+  const REDACT_PATTERNS = [
+    [/AIza[0-9A-Za-z_\-]{10,}/g, '[REDACTED_KEY]'],
+    [/(x-goog-api-key\s*[:=]\s*)[^\s"',&]+/gi, '$1[REDACTED]'],
+    [/((?:^|[?&;\s"'])(?:api_?key|key|token|access_token)=)[^&\s"']+/gi, '$1[REDACTED]'],
+    [/(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s"',]+/gi, '$1[REDACTED]'],
+  ];
+
+  function redact(text, secrets) {
+    let out = String(text);
+    for (const s of secrets || []) {
+      if (s && s.length >= 6) out = out.split(s).join('[REDACTED]');
+    }
+    for (const [re, rep] of REDACT_PATTERNS) out = out.replace(re, rep);
+    return out;
+  }
+
+  // メモリ上だけのログ（保存しない）。必ず redact を通す。
+  function createLogger(opts) {
+    opts = opts || {};
+    const max = opts.max || 300;
+    const secrets = opts.secrets || (() => []);
+    const now = opts.now || (() => new Date().toISOString());
+    const lines = [];
+    return {
+      log(level, category, message) {
+        const clean = redact(message, secrets()).replace(/\r/g, ' ').replace(/\n/g, '\\n');
+        lines.push(now() + ' [' + level + '] ' + category + ': ' + clean);
+        if (lines.length > max) lines.splice(0, lines.length - max);
+      },
+      lines() { return lines.slice(); },
+      clear() { lines.length = 0; },
+    };
+  }
+
+  return {
+    GestureMachine, Cost, Fmt, Balance, PRICING, MODEL, Protocol, Assembler,
+    Resampler, floatToPcm16, bytesToBase64, ChunkBuffer, CHUNK_BYTES,
+    Dict, hunks, suggest, redact, createLogger,
+  };
+})();
+
+
+/* VoiceInput Mobile — 画面・録音・通信。core.js の VI を使う。 */
+(function () {
+  'use strict';
+
+  // ------------------------------------------------------------ 小道具
+  const $ = (id) => document.getElementById(id);
+
+  function h(tag, attrs) {
+    const e = document.createElement(tag);
+    attrs = attrs || {};
+    for (const k in attrs) {
+      const v = attrs[k];
+      if (v === false || v === null || v === undefined) continue;
+      if (k === 'class') e.className = v;
+      else if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else if (v === true) e.setAttribute(k, '');
+      else e.setAttribute(k, v);
+    }
+    for (let i = 2; i < arguments.length; i++) {
+      const kids = Array.isArray(arguments[i]) ? arguments[i] : [arguments[i]];
+      for (const c of kids) {
+        if (c === null || c === undefined || c === false) continue;
+        e.append(c); // 文字列は常にテキストノードになる（innerHTML は使わない）
+      }
+    }
+    return e;
+  }
+
+  const store = {
+    get(k, def) {
+      try { const v = localStorage.getItem(k); return v === null ? def : JSON.parse(v); } catch (e) { return def; }
+    },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  };
+
+  // ------------------------------------------------------------ 状態
+  const settings = Object.assign(
+    { language: 'auto', sendHints: true, usdToJPY: 150, balance: { baseJPY: 0, spentJPY: 0 }, persistKey: true, keepMicSec: 15 },
+    store.get('vi.settings', {}));
+  const dict = Object.assign(VI.Dict.empty(), store.get('vi.dict', {}));
+  if (!Array.isArray(dict.hints)) dict.hints = [];
+  if (!Array.isArray(dict.rules)) dict.rules = [];
+  let history = store.get('vi.history', []);
+  if (!Array.isArray(history)) history = [];
+  const HISTORY_LIMIT = 200;
+
+  const saveSettings = () => store.set('vi.settings', settings);
+  const saveDict = () => store.set('vi.dict', dict);
+  const saveHistory = () => store.set('vi.history', history);
+
+  // API キー: localStorage（このスマホ内）または sessionStorage。画面・ログには出さない。
+  const KEY_NAME = 'vi.k';
+  function loadKey() {
+    try { return sessionStorage.getItem(KEY_NAME) || localStorage.getItem(KEY_NAME) || ''; } catch (e) { return ''; }
+  }
+  function saveKey(key, persist) {
+    try {
+      sessionStorage.removeItem(KEY_NAME); localStorage.removeItem(KEY_NAME);
+      (persist ? localStorage : sessionStorage).setItem(KEY_NAME, key);
+      return true;
+    } catch (e) { return false; }
+  }
+  function deleteKey() { try { sessionStorage.removeItem(KEY_NAME); localStorage.removeItem(KEY_NAME); } catch (e) { /* 無視 */ } }
+  let apiKey = loadKey();
+
+  const logger = VI.createLogger({ secrets: () => (apiKey ? [apiKey] : []) });
+  const log = (level, cat, msg) => logger.log(level, cat, msg);
+
+  // ------------------------------------------------------------ 音声（マイク）
+  const audio = {
+    ctx: null, stream: null, source: null, proc: null, resampler: null,
+    capturing: false, buf: new VI.ChunkBuffer(), idleTimer: null, starting: null, onData: null,
+
+    ensure() {
+      clearTimeout(this.idleTimer);
+      if (this.ctx && this.stream) return Promise.resolve();
+      if (this.starting) return this.starting;
+      const self = this;
+      this.starting = (async function () {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('このブラウザはマイクに対応していません（HTTPS で開いてください）');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AC();
+        if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) { /* 無視 */ } }
+        const source = ctx.createMediaStreamSource(stream);
+        const proc = ctx.createScriptProcessor(4096, 1, 1);
+        const mute = ctx.createGain();
+        mute.gain.value = 0;
+        proc.onaudioprocess = function (ev) {
+          if (!self.capturing || !self.resampler) return;
+          const pcm = VI.floatToPcm16(self.resampler.process(ev.inputBuffer.getChannelData(0)));
+          self.buf.push(pcm);
+          if (self.onData) self.onData();
+        };
+        source.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+        self.ctx = ctx; self.stream = stream; self.source = source; self.proc = proc;
+      })();
+      const p = this.starting;
+      const clear = () => { if (this.starting === p) this.starting = null; };
+      p.then(clear, clear);
+      return p;
+    },
+    startCapture() {
+      this.buf.clear();
+      this.resampler = new VI.Resampler(this.ctx.sampleRate);
+      this.capturing = true;
+    },
+    stopCapture() {
+      this.capturing = false;
+      clearTimeout(this.idleTimer);
+      // 連続して使うときの頭欠けを避けるため、少しだけマイクを待機させる
+      this.idleTimer = setTimeout(() => this.release(), Math.max(0, settings.keepMicSec) * 1000);
+    },
+    release() {
+      clearTimeout(this.idleTimer);
+      this.capturing = false;
+      try { if (this.proc) { this.proc.onaudioprocess = null; this.proc.disconnect(); } } catch (e) { /* 無視 */ }
+      try { if (this.source) this.source.disconnect(); } catch (e) { /* 無視 */ }
+      try { if (this.stream) this.stream.getTracks().forEach((t) => t.stop()); } catch (e) { /* 無視 */ }
+      try { if (this.ctx) this.ctx.close(); } catch (e) { /* 無視 */ }
+      this.ctx = null; this.stream = null; this.source = null; this.proc = null;
+    },
+  };
+
+  // ------------------------------------------------------------ Live API セッション
+  async function toText(data) {
+    if (typeof data === 'string') return data;
+    if (data && typeof data.text === 'function') return data.text();
+    if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+    return '';
+  }
+
+  class LiveSession {
+    constructor(key, languageCodes, vocabulary, onEvent) {
+      this.key = key; this.languageCodes = languageCodes; this.vocabulary = vocabulary; this.onEvent = onEvent;
+      this.ws = null; this.ready = false; this.finishRequested = false; this.closed = false;
+      this.queued = []; this.q = Promise.resolve();
+    }
+    connect() {
+      // 注意: URL にキーが入るので、URL はログにも画面にも出さない
+      const url = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=' + encodeURIComponent(this.key);
+      const ws = new WebSocket(url);
+      this.ws = ws;
+      ws.onopen = () => this.send(VI.Protocol.setupMessage(this.languageCodes, this.vocabulary));
+      ws.onmessage = (e) => {
+        this.q = this.q.then(() => toText(e.data)).then((t) => {
+          if (this.closed) return;
+          for (const ev of VI.Protocol.parse(t)) this.handle(ev);
+        }).catch(() => { /* 無視 */ });
+      };
+      ws.onerror = () => { if (!this.closed) this.onEvent({ type: 'error', message: '接続エラー（通信状態を確認してください）' }); };
+      ws.onclose = (e) => {
+        if (this.closed) return;
+        const reason = VI.redact(e && e.reason ? e.reason : '', apiKey ? [apiKey] : []);
+        let msg = '接続が閉じました（code ' + (e ? e.code : '?') + '）';
+        if (/api key|permission|invalid|expired|quota/i.test(reason)) msg += ' — APIキーや利用枠を確認してください';
+        log('WARN', 'live', 'closed code=' + (e ? e.code : '?') + ' reason=' + reason);
+        this.onEvent({ type: 'error', message: msg });
+      };
+    }
+    send(text) {
+      if (this.ws && this.ws.readyState === 1) {
+        try { this.ws.send(text); } catch (e) { log('WARN', 'live', 'send failed'); }
+      }
+    }
+    sendAudio(u8) {
+      if (this.closed) return;
+      const msg = VI.Protocol.audioChunk(VI.bytesToBase64(u8));
+      if (this.ready) this.send(msg); else this.queued.push(msg);
+    }
+    finish() {
+      if (this.closed) return;
+      this.finishRequested = true;
+      if (this.ready) this.send(VI.Protocol.activityEnd());
+    }
+    close() {
+      this.closed = true;
+      this.queued = [];
+      try { if (this.ws) { this.ws.onopen = this.ws.onmessage = this.ws.onerror = this.ws.onclose = null; this.ws.close(1000); } } catch (e) { /* 無視 */ }
+      this.ws = null;
+    }
+    handle(ev) {
+      if (ev.type === 'setupComplete') {
+        this.ready = true;
+        this.send(VI.Protocol.activityStart());
+        for (const m of this.queued) this.send(m);
+        this.queued = [];
+        if (this.finishRequested) this.send(VI.Protocol.activityEnd());
+      }
+      this.onEvent(ev);
+    }
+  }
+
+  // ------------------------------------------------------------ 録音の流れ
+  const machine = new VI.GestureMachine();
+  let phase = 'idle'; // idle | capturing | recording | finishing
+  let session = null;
+  let pending = [];
+  let assembler = new VI.Assembler();
+  let bytesSent = 0, usagePrompt = 0, usageResponse = 0, utteranceStart = 0;
+  let maxTimer = null, finishTimer = null, tickTimer = null, captureToken = 0;
+  let copyDef = null, copyWrite = Promise.resolve(false);
+  let lastResult = null;
+
+  const nowSec = () => (window.performance ? performance.now() : Date.now()) / 1000;
+
+  function setLive(status, text, stats) {
+    if (status !== undefined && status !== null) $('liveStatus').textContent = status;
+    if (text !== undefined && text !== null) {
+      const t = text.length > 200 ? '…' + text.slice(-200) : text;
+      $('liveText').textContent = t;
+      $('liveText').hidden = t === '';
+    }
+    if (stats !== undefined && stats !== null) { $('liveStats').textContent = stats; $('liveStats').hidden = stats === ''; }
+  }
+  function setIdleLive() { setLive('待機中 — ボタンを長押しして話す', '', ''); }
+
+  function setMicClass() {
+    const b = $('mic');
+    b.classList.toggle('rec', phase === 'recording' || phase === 'finishing');
+    b.classList.toggle('lock', machine.state.k === 'locked');
+    b.setAttribute('aria-pressed', phase === 'recording' ? 'true' : 'false');
+  }
+
+  function defer() {
+    const d = {};
+    d.promise = new Promise((res, rej) => { d.resolve = res; d.reject = rej; });
+    d.promise.catch(() => { /* 未処理の拒否を出さない */ });
+    return d;
+  }
+
+  // 指を離した瞬間（ユーザー操作の中）にクリップボードへ書き込みを開始し、テキストは後から確定させる
+  function startCopy() {
+    copyDef = defer();
+    copyWrite = Promise.resolve(false);
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.write === 'function' && window.ClipboardItem) {
+        const blob = copyDef.promise.then((t) => new Blob([t], { type: 'text/plain' }));
+        copyWrite = navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]).then(() => true, () => false);
+      }
+    } catch (e) { copyWrite = Promise.resolve(false); }
+  }
+  function cancelCopy() { if (copyDef) { copyDef.reject(new Error('cancelled')); copyDef = null; } }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; }
+    } catch (e) { /* 次の方法へ */ }
+    try {
+      const ta = h('textarea', { readonly: true, style: 'position:fixed;top:0;left:0;opacity:0' });
+      ta.value = text;
+      document.body.append(ta);
+      ta.select(); ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch (e) { return false; }
+  }
+
+  function beginCapture() {
+    if (phase !== 'idle') return;
+    pending = [];
+    assembler = new VI.Assembler();
+    bytesSent = 0; usagePrompt = 0; usageResponse = 0;
+    audio.buf.clear();
+    phase = 'capturing';
+    const token = ++captureToken;
+    audio.onData = () => pump(false);
+    audio.ensure().then(() => {
+      if (token === captureToken && (phase === 'capturing' || phase === 'recording')) audio.startCapture();
+    }).catch((err) => {
+      if (token !== captureToken) return;
+      log('ERROR', 'audio', 'mic failed: ' + (err && err.name ? err.name : 'error'));
+      const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
+      setLive(denied ? 'マイクが許可されていません（ブラウザの設定で許可してください）' : 'マイクを開始できません: ' + (err && err.message ? err.message : ''), '', '');
+      phase = 'idle'; machine.reset(); cancelCopy(); setMicClass();
+      setTimeout(() => { if (phase === 'idle') setIdleLive(); }, 4000);
+    });
+  }
+
+  function showRecording(locked) {
+    if (phase !== 'capturing') return;
+    if (!apiKey) {
+      log('WARN', 'app', 'no API key');
+      setLive('APIキーが未設定です（「設定」タブで入力）', '', '');
+      discard('no-key', true);
+      machine.reset();
+      setTimeout(() => { if (phase === 'idle') setIdleLive(); }, 4000);
+      return;
+    }
+    const vocab = settings.sendHints ? VI.Dict.vocabularyForAPI(dict) : [];
+    const codes = settings.language === 'auto' ? [] : [settings.language];
+    session = new LiveSession(apiKey, codes, vocab, handleLive);
+    phase = 'recording';
+    utteranceStart = Date.now();
+    session.connect();
+    log('INFO', 'live', 'connecting (mode=SMART, hints=' + vocab.length + ', lang=' + settings.language + ', locked=' + locked + ')');
+    for (const c of pending) { bytesSent += c.length; session.sendAudio(c); }
+    pending = [];
+    setLive(locked ? '● 録音中（固定）— もう一度タップで確定' : '● 録音中 — 離すと確定 / 上へスライドで取消', '', '');
+    $('cancelBtn').hidden = !locked;
+    try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) { /* 無視 */ }
+    clearTimeout(maxTimer);
+    maxTimer = setTimeout(() => { // セッション上限(10分)の手前で自動確定
+      log('WARN', 'app', 'max duration reached; auto commit');
+      machine.reset();
+      commit();
+    }, 9 * 60 * 1000);
+    setMicClass();
+  }
+
+  function commit() {
+    if (phase !== 'recording') return;
+    startCopy();
+    audio.stopCapture();
+    pump(true);
+    phase = 'finishing';
+    clearTimeout(maxTimer);
+    session.finish();
+    setLive('確定中…');
+    $('cancelBtn').hidden = true;
+    clearTimeout(finishTimer);
+    finishTimer = setTimeout(() => { log('WARN', 'live', 'timed out waiting for turnComplete'); finalize(); }, 6000);
+    setMicClass();
+  }
+
+  function discard(reason, keepLive) {
+    if (phase !== 'capturing' && phase !== 'recording') return;
+    const wasRecording = phase === 'recording';
+    captureToken++;
+    audio.stopCapture();
+    audio.buf.clear();
+    if (session) { session.close(); session = null; }
+    pending = [];
+    clearTimeout(maxTimer);
+    phase = 'idle';
+    cancelCopy();
+    if (wasRecording) log('INFO', 'app', 'recording discarded (' + reason + ')');
+    $('cancelBtn').hidden = true;
+    if (!keepLive) setIdleLive();
+    setMicClass();
+  }
+
+  function pump(flush) {
+    for (const c of audio.buf.take(flush)) {
+      if (phase === 'capturing') pending.push(c);
+      else if (phase === 'recording' || phase === 'finishing') { bytesSent += c.length; if (session) session.sendAudio(c); }
+    }
+  }
+
+  function handleLive(ev) {
+    switch (ev.type) {
+      case 'setupComplete': log('INFO', 'live', 'setupComplete'); break;
+      case 'interim':
+        assembler.setInterim(ev.text);
+        if (phase === 'recording' || phase === 'finishing') setLive(null, assembler.display);
+        break;
+      case 'final':
+        assembler.addFinal(ev.text);
+        log('DEBUG', 'live', 'final segment chars=' + ev.text.length);
+        if (phase === 'recording' || phase === 'finishing') setLive(null, assembler.display);
+        break;
+      case 'usage':
+        usagePrompt = Math.max(usagePrompt, ev.prompt);
+        usageResponse = Math.max(usageResponse, ev.response);
+        break;
+      case 'turnComplete': if (phase === 'finishing') finalize(); break;
+      case 'goAway': log('WARN', 'live', 'server goAway'); break;
+      case 'error':
+        log('ERROR', 'live', 'error: ' + ev.message);
+        if (phase === 'recording') {
+          setLive('通信エラー: ' + ev.message, '', '');
+          discard('error', true);
+          machine.reset();
+          setTimeout(() => { if (phase === 'idle') setIdleLive(); }, 5000);
+        } else if (phase === 'finishing') finalize();
+        break;
+      default: break;
+    }
+  }
+
+  function finalize() {
+    if (phase !== 'finishing') return;
+    clearTimeout(finishTimer);
+    if (session) { session.close(); session = null; }
+    phase = 'idle';
+    setMicClass();
+
+    let raw = assembler.committed;
+    if (!raw) raw = assembler.display;
+    raw = raw.trim();
+    const seconds = bytesSent / 32000;
+    if (!raw) {
+      log('INFO', 'app', 'empty result (seconds=' + seconds.toFixed(1) + ')');
+      cancelCopy();
+      setLive('認識結果がありませんでした', '', '');
+      setTimeout(() => { if (phase === 'idle') setIdleLive(); }, 3000);
+      return;
+    }
+
+    const output = VI.Dict.applyRules(dict, raw);
+    if (copyDef) { copyDef.resolve(output); copyDef = null; }
+
+    const reported = usagePrompt > 0 || usageResponse > 0;
+    const inTok = usagePrompt > 0 ? usagePrompt : VI.Cost.estimatedInputTokens(seconds);
+    const outTok = usageResponse > 0 ? usageResponse : VI.Cost.estimatedOutputTokens(raw);
+    const cost = VI.Cost.costJPY(inTok, outTok, settings.usdToJPY);
+    const stats = { seconds: seconds, inputTokens: inTok, outputTokens: outTok, costJPY: cost, isEstimated: !reported };
+
+    settings.balance = VI.Balance.spend(settings.balance, cost);
+    saveSettings();
+    history.push({
+      id: String(Date.now()) + Math.random().toString(36).slice(2, 6), date: Date.now(), raw: raw, output: output, corrected: null,
+      seconds: seconds, inputTokens: inTok, outputTokens: outTok, costJPY: cost, isEstimated: !reported,
+    });
+    if (history.length > HISTORY_LIMIT) history = history.slice(history.length - HISTORY_LIMIT);
+    saveHistory();
+
+    const elapsed = (Date.now() - utteranceStart) / 1000;
+    log('INFO', 'app', 'utterance done: audio=' + seconds.toFixed(1) + 's elapsed=' + elapsed.toFixed(1) + 's chars=' + output.length +
+      ' tokens=' + inTok + '/' + outTok + ' estimated=' + (!reported) + ' costJPY=' + cost.toFixed(3));
+
+    const summary = VI.Fmt.summary(stats, VI.Balance.remaining(settings.balance));
+    lastResult = { text: output, summary: summary, copied: false };
+    setLive('✓ 認識しました', output, summary);
+    renderResult();
+    copyWrite.then((ok) => { if (lastResult && lastResult.text === output) { lastResult.copied = ok; renderResult(); if (ok) setLive('✓ 認識しました（コピー済み）'); } });
+  }
+
+  function renderResult() {
+    const box = $('result');
+    box.textContent = '';
+    if (!lastResult) return;
+    const r = lastResult;
+    const copyBtn = h('button', { class: 'btn primary', type: 'button' }, r.copied ? '✓ コピー済み（もう一度コピー）' : 'コピー');
+    copyBtn.addEventListener('click', async () => {
+      const ok = await copyText(r.text);
+      copyBtn.textContent = ok ? '✓ コピーしました' : 'コピーできませんでした（文字を長押しして選択）';
+    });
+    box.append(h('div', { class: 'card' },
+      h('div', { class: 'label' }, '認識結果'),
+      h('div', { class: 'resulttext' }, r.text),
+      h('div', { class: 'stats' }, r.summary),
+      h('div', { class: 'row' }, copyBtn)));
+  }
+
+  // ------------------------------------------------------------ ボタン操作（Mac の右Option の代わり）
+  function perform(a) {
+    if (a === 'beginCapture') beginCapture();
+    else if (a === 'showRecording') showRecording(false);
+    else if (a === 'showRecordingLocked') showRecording(true);
+    else if (a === 'commit') commit();
+    else if (a === 'discard') discard('user');
+  }
+
+  function updateTick() {
+    if (machine.isIdle) { clearInterval(tickTimer); tickTimer = null; }
+    else if (!tickTimer) {
+      tickTimer = setInterval(() => { fire('tick'); }, 30);
+    }
+  }
+
+  function fire(ev) {
+    const acts = machine.handle(ev, nowSec());
+    if (acts.length) log('DEBUG', 'gesture', ev + ' -> ' + acts.join(','));
+    acts.forEach(perform);
+    updateTick();
+    setMicClass();
+  }
+
+  function setupMicButton() {
+    const btn = $('mic');
+    let pressId = null, startY = 0, willCancel = false;
+
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (machine.state.k === 'locked') return; // 固定中の確定は「指を離したとき」に行う（クリップボード書き込みのため）
+      if (pressId !== null) return;
+      pressId = e.pointerId === undefined ? 0 : e.pointerId;
+      startY = e.clientY || 0;
+      willCancel = false;
+      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
+      fire('down');
+    });
+    btn.addEventListener('pointermove', (e) => {
+      if (pressId === null) return;
+      const cancel = ((e.clientY || 0) - startY) < -80;
+      if (cancel !== willCancel) {
+        willCancel = cancel;
+        if (machine.state.k === 'holding') setLive(cancel ? '離すと取消します' : '● 録音中 — 離すと確定 / 上へスライドで取消');
+        btn.classList.toggle('cancel', cancel);
+      }
+    });
+    btn.addEventListener('pointerup', (e) => {
+      if (pressId === null) {
+        if (machine.state.k === 'locked') { fire('down'); fire('up'); } // 固定中のタップ → 確定
+        return;
+      }
+      pressId = null;
+      if (willCancel) fire('escape');
+      willCancel = false;
+      btn.classList.remove('cancel');
+      fire('up');
+    });
+    btn.addEventListener('pointercancel', () => {
+      if (pressId === null) return;
+      pressId = null; willCancel = false;
+      btn.classList.remove('cancel');
+      fire('escape'); fire('up');
+    });
+
+    // パソコンで試すときのためのスペースキー
+    let spaceDown = false;
+    document.addEventListener('keydown', (e) => {
+      if (e.code !== 'Space' || spaceDown) return;
+      const t = e.target;
+      if (t && t !== document.body && t !== btn) return;
+      e.preventDefault(); spaceDown = true; fire('down');
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.code !== 'Space' || !spaceDown) return;
+      spaceDown = false; e.preventDefault();
+      if (machine.state.k === 'locked') { fire('down'); fire('up'); } else fire('up');
+    });
+
+    $('cancelBtn').addEventListener('click', () => { fire('escape'); setMicClass(); });
+  }
+
+  // アプリが裏に回ったら録音を破棄する（OS がマイクを止めるため）
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && (phase === 'recording' || phase === 'capturing')) {
+      machine.reset();
+      discard('hidden', true);
+      setLive('画面が切り替わったため録音を取り消しました', '', '');
+      updateTick();
+    }
+  });
+
+  // ------------------------------------------------------------ タブ
+  let currentTab = 'rec';
+  function showTab(name) {
+    currentTab = name;
+    for (const t of ['rec', 'dict', 'hist', 'set']) {
+      $('p-' + t).hidden = t !== name;
+      $('t-' + t).classList.toggle('on', t === name);
+    }
+    if (name === 'dict') renderDict();
+    if (name === 'hist') renderHistory();
+    if (name === 'set') renderSettings();
+    if (name === 'rec') renderBalance();
+  }
+
+  function renderBalance() {
+    const r = VI.Balance.remaining(settings.balance);
+    $('balance').textContent = r === null ? '残高の目安: 未設定（設定タブで入力）' : '残高の目安: ' + VI.Fmt.yen(r);
+  }
+
+  // ------------------------------------------------------------ 辞書タブ
+  function renderDict() {
+    const box = $('p-dict');
+    box.textContent = '';
+
+    const hintIn = h('input', { type: 'text', placeholder: '固有名詞・専門用語など', autocapitalize: 'off', spellcheck: 'false' });
+    const addHint = () => { if (VI.Dict.addHint(dict, hintIn.value)) { saveDict(); renderDict(); } };
+    const hintsCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, '認識ヒント語（' + dict.hints.length + '）'),
+      h('div', { class: 'row' }, hintIn, h('button', { class: 'btn', type: 'button', onclick: addHint }, '追加')),
+      dict.hints.length > 100 ? h('div', { class: 'warn' }, '100語を超えると精度が下がる場合があります（上限1000語）') : null,
+      dict.hints.map((t) => h('div', { class: 'item' }, h('span', { class: 'grow' }, t),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { dict.hints = dict.hints.filter((x) => x !== t); saveDict(); renderDict(); } }, '削除'))));
+
+    const fromIn = h('input', { type: 'text', placeholder: '置換前', autocapitalize: 'off', spellcheck: 'false' });
+    const toIn = h('input', { type: 'text', placeholder: '置換後', autocapitalize: 'off', spellcheck: 'false' });
+    const rulesCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, '置換ルール（認識後に上から順に適用）'),
+      h('div', { class: 'row' }, fromIn, h('span', null, '→'), toIn,
+        h('button', { class: 'btn', type: 'button', onclick: () => { if (VI.Dict.addRule(dict, fromIn.value, toIn.value)) { saveDict(); renderDict(); } } }, '追加')),
+      dict.rules.map((r) => {
+        const f = h('input', { type: 'text', value: r.from, autocapitalize: 'off', spellcheck: 'false' });
+        const t = h('input', { type: 'text', value: r.to, autocapitalize: 'off', spellcheck: 'false' });
+        f.addEventListener('change', () => { r.from = f.value; saveDict(); });
+        t.addEventListener('change', () => { r.to = t.value; saveDict(); });
+        const en = h('input', { type: 'checkbox' }); en.checked = !!r.enabled;
+        en.addEventListener('change', () => { r.enabled = en.checked; saveDict(); });
+        const rx = h('input', { type: 'checkbox' }); rx.checked = !!r.isRegex;
+        rx.addEventListener('change', () => { r.isRegex = rx.checked; saveDict(); });
+        return h('div', { class: 'item col' },
+          h('div', { class: 'row' }, h('label', { class: 'chk' }, en, '有効'), f, h('span', null, '→'), t),
+          h('div', { class: 'row' }, h('label', { class: 'chk' }, rx, '正規表現'), h('span', { class: 'grow' }),
+            h('button', { class: 'btn small', type: 'button', onclick: () => { dict.rules = dict.rules.filter((x) => x.id !== r.id); saveDict(); renderDict(); } }, '削除')));
+      }));
+
+    const sg = VI.suggest(history, dict);
+    const sugCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, '学習候補（履歴で直した文から）'),
+      (sg.rules.length === 0 && sg.hints.length === 0) ? h('div', { class: 'muted' }, '候補はありません。「履歴」タブで認識結果を直して保存すると、ここに候補が出ます。') : null,
+      sg.rules.map((s) => h('div', { class: 'item' },
+        h('span', { class: 'grow' }, '「' + s.from + '」→「' + s.to + '」 ×' + s.count),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { VI.Dict.addRule(dict, s.from, s.to); saveDict(); renderDict(); } }, '置換ルールに追加'))),
+      sg.hints.map((s) => h('div', { class: 'item' },
+        h('span', { class: 'grow' }, 'ヒント語「' + s.term + '」 ×' + s.count),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { VI.Dict.addHint(dict, s.term); saveDict(); renderDict(); } }, 'ヒント語に追加'))));
+
+    box.append(hintsCard, rulesCard, sugCard);
+  }
+
+  // ------------------------------------------------------------ 履歴タブ
+  let selectedId = null;
+  function fmtDate(ms) {
+    try { return new Date(ms).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
+  }
+
+  function renderHistory() {
+    const box = $('p-hist');
+    box.textContent = '';
+    const cur = history.find((e) => e.id === selectedId) || null;
+
+    if (cur) {
+      const ta = h('textarea', { rows: '5', spellcheck: 'false' });
+      ta.value = cur.corrected || cur.output;
+      box.append(h('div', { class: 'card' },
+        h('div', { class: 'label' }, 'API の認識結果'),
+        h('div', { class: 'resulttext' }, cur.raw),
+        h('div', { class: 'label' }, '貼り付けた文を直してください'),
+        ta,
+        h('div', { class: 'row' },
+          h('button', { class: 'btn primary', type: 'button', onclick: () => {
+            cur.corrected = (ta.value === cur.output || ta.value === '') ? null : ta.value;
+            saveHistory(); renderHistory();
+          } }, '修正を保存'),
+          h('button', { class: 'btn', type: 'button', onclick: () => { cur.corrected = null; saveHistory(); renderHistory(); } }, '元に戻す')),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn', type: 'button', onclick: async () => { await copyText(ta.value); } }, 'この文をコピー'),
+          h('button', { class: 'btn', type: 'button', onclick: () => { selectedId = null; renderHistory(); } }, '一覧に戻る'),
+          h('button', { class: 'btn danger', type: 'button', onclick: () => { history = history.filter((e) => e.id !== cur.id); saveHistory(); selectedId = null; renderHistory(); } }, '削除')),
+        h('div', { class: 'stats' }, VI.Fmt.summary(cur, null))));
+      return;
+    }
+
+    if (history.length === 0) {
+      box.append(h('div', { class: 'card muted' }, 'まだ履歴がありません。'));
+      return;
+    }
+    box.append(h('div', { class: 'card' },
+      h('div', { class: 'label' }, '履歴（このスマホにだけ保存。タップで修正）'),
+      history.slice().reverse().map((e) => h('div', { class: 'item col clickable', onclick: () => { selectedId = e.id; renderHistory(); } },
+        h('div', null, e.output),
+        h('div', { class: 'muted small' }, fmtDate(e.date) + (e.corrected ? ' ・ 修正済み' : ''))))));
+  }
+
+  // ------------------------------------------------------------ 設定タブ
+  function renderSettings() {
+    const box = $('p-set');
+    box.textContent = '';
+
+    // API キー: 伏せ字入力。保存後は欄を空にし、キーを画面に残さない
+    const keyIn = h('input', { type: 'password', placeholder: 'APIキーを貼り付け', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+    const keyMsg = h('div', { class: 'muted small' }, apiKey ? '状態: 保存済み' : '状態: 未設定');
+    const persist = h('input', { type: 'checkbox' }); persist.checked = !!settings.persistKey;
+    const keyCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, 'Gemini APIキー'),
+      h('div', { class: 'row' }, keyIn,
+        h('button', { class: 'btn primary', type: 'button', onclick: () => {
+          const v = keyIn.value.trim();
+          if (!v) return;
+          settings.persistKey = persist.checked; saveSettings();
+          if (saveKey(v, persist.checked)) { apiKey = v; keyIn.value = ''; keyMsg.textContent = '状態: 保存済み（' + (persist.checked ? 'このスマホに保存' : 'このタブを閉じると消えます') + '）'; log('INFO', 'key', 'API key saved'); }
+          else keyMsg.textContent = '保存できませんでした';
+        } }, '保存'),
+        h('button', { class: 'btn', type: 'button', onclick: () => { deleteKey(); apiKey = ''; keyIn.value = ''; keyMsg.textContent = '削除しました'; log('INFO', 'key', 'API key deleted'); } }, '削除')),
+      h('label', { class: 'chk' }, persist, 'このスマホに保存する（オフ＝タブを閉じると消える）'),
+      keyMsg,
+      h('div', { class: 'muted small' }, 'キーはこのスマホのブラウザ内にだけ保存され、Gemini 以外には送りません。スマホ専用のキーを別に作り、Google 側で利用上限を設定してください。'));
+
+    const lang = h('select', null,
+      h('option', { value: 'auto' }, '自動判別'), h('option', { value: 'ja-JP' }, '日本語'), h('option', { value: 'en-US' }, 'English (US)'));
+    lang.value = settings.language;
+    lang.addEventListener('change', () => { settings.language = lang.value; saveSettings(); });
+    const hints = h('input', { type: 'checkbox' }); hints.checked = !!settings.sendHints;
+    hints.addEventListener('change', () => { settings.sendHints = hints.checked; saveSettings(); });
+    const recCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, '認識'),
+      h('div', { class: 'row' }, h('span', null, '言語'), lang),
+      h('label', { class: 'chk' }, hints, '辞書のヒント語を認識に使う'),
+      h('div', { class: 'muted small' }, 'SMARTモードとヒント語の併用で「2番目のもの」等が辞書語に置き換わる報告があります。気になる場合はオフにしてください。'));
+
+    const fx = h('input', { type: 'text', inputmode: 'decimal', value: String(settings.usdToJPY) });
+    fx.addEventListener('change', () => { const v = parseFloat(fx.value); if (v > 0) { settings.usdToJPY = v; saveSettings(); } else fx.value = String(settings.usdToJPY); });
+    const bal = h('input', { type: 'text', inputmode: 'decimal', value: settings.balance.baseJPY ? String(settings.balance.baseJPY) : '' , placeholder: '例: 1000' });
+    const balMsg = h('div', { class: 'muted small' });
+    const refreshBal = () => {
+      const r = VI.Balance.remaining(settings.balance);
+      balMsg.textContent = r === null ? '残高の目安: 未設定' : '残高の目安: ' + VI.Fmt.yen(r) + '（基準 ' + VI.Fmt.yen(settings.balance.baseJPY) + ' − 利用 ' + VI.Fmt.yen(settings.balance.spentJPY) + '）';
+    };
+    refreshBal();
+    const costCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, '費用・残高の目安'),
+      h('div', { class: 'row' }, h('span', null, '為替（円/USD）'), fx),
+      h('div', { class: 'row' }, h('span', null, 'いまの残高（円）'), bal,
+        h('button', { class: 'btn', type: 'button', onclick: () => { const v = parseFloat(bal.value); if (v >= 0) { settings.balance = VI.Balance.reset(v); saveSettings(); refreshBal(); renderBalance(); } } }, '基準にする')),
+      balMsg,
+      h('div', { class: 'muted small' }, 'Gemini APIには残高を取得する仕組みがないため、入力した金額からこのスマホでの利用分を引いた目安です。'));
+
+    const logMsg = h('div', { class: 'muted small' });
+    const dataCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, 'データ'),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', type: 'button', onclick: async () => { const ok = await copyText(logger.lines().join('\n') || '(ログなし)'); logMsg.textContent = ok ? 'ログをコピーしました（APIキーは含まれません）' : 'コピーできませんでした'; } }, 'ログをコピー'),
+        h('button', { class: 'btn danger', type: 'button', onclick: () => { if (window.confirm('履歴をすべて削除しますか？')) { history = []; saveHistory(); selectedId = null; logMsg.textContent = '履歴を削除しました'; } } }, '履歴を全部削除')),
+      logMsg,
+      h('div', { class: 'muted small' }, 'ログは画面を閉じると消えます。認識した文章の本文は記録せず、文字数だけ記録します。'));
+
+    const howCard = h('div', { class: 'card' },
+      h('div', { class: 'label' }, '使い方'),
+      h('div', { class: 'muted small' }, 'マイクボタンを長押し＝押している間だけ録音／素早く2回タップ＝録音固定（もう一度タップで確定）／押したまま上へスライド＝取消。確定すると認識結果が自動でコピーされます（コピーできなかったときは「コピー」ボタン）。'));
+
+    box.append(keyCard, recCard, costCard, dataCard, howCard);
+  }
+
+  // ------------------------------------------------------------ 起動
+  function init() {
+    for (const t of ['rec', 'dict', 'hist', 'set']) $('t-' + t).addEventListener('click', () => showTab(t));
+    setupMicButton();
+    setIdleLive();
+    showTab(apiKey ? 'rec' : 'set');
+    log('INFO', 'app', 'started; key=' + (apiKey ? 'set' : 'unset') + ' ua=' + (navigator.userAgent || '').slice(0, 60));
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+
+  // テスト用の入口。URL に #vi-test が付いたときだけ公開する（通常の利用では公開しない）
+  if (location.hash === '#vi-test') window.__vi = { fire: fire, state: () => ({ phase: phase, gesture: machine.state.k }), history: () => history.slice(), logs: () => logger.lines(), showTab: showTab };
+})();
+
+</script>
+</body>
+</html>
